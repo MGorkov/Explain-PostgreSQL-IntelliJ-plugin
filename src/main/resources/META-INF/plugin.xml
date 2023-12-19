@@ -1,0 +1,60 @@
+<idea-plugin>
+  <id>com.mgorkov.explainpostgresql</id>
+  <name>Explain PostgreSQL</name>
+  <vendor email="explain@tensor.ru" url="https://explain.tensor.ru">TENSOR COMPANY LTD</vendor>
+
+  <description><![CDATA[
+  Analyzes EXPLAIN plan from PostgreSQL and related (Greenplum, Citus, TimescaleDB and Amazon RedShift).
+  <br><br>
+  Shows plan and node details and visualizations with piechart, flowchart and tilemap, also gives smart recommendations to improve query.
+  <p><a href="https://explain.tensor.ru/about">Learn more</a>
+  <br><br>
+  Usage:
+   <ul>
+    <li>Plan analyze - open "Explain PostgreSQL" tool window and paste the plan to site</li>
+    <li>Format query - right-click the current query and in context menu choose "SQL Format" or press "Ctrl+Q F"
+     <br>(uses the public api from the https://explain.tensor.ru , the site can be changed in Settings | Tools | Explain PostgreSQL)</br>
+    </li>
+    <li>Run query and analyze plan - right-click the query in "Query console" and in context menu choose "Explain Plan | Explain Analyze (Tensor)"
+     <br>(Webstorm requires installation of Database Tools and SQL plugin)</br>
+    </li>
+    </ul>
+  <br><br>
+  <a href="https://n.sbis.ru/explain">Support</a>
+  ]]></description>
+
+  <change-notes><![CDATA[
+       <ul>
+        <li><b>1.0</b> Initial release</li>
+      </ul>
+    ]]>
+  </change-notes>
+
+  <depends>com.intellij.modules.platform</depends>
+  <depends>com.intellij.modules.lang</depends>
+  <depends optional="true" config-file="plugin-withdatabase.xml">com.intellij.database</depends>
+
+  <extensions defaultExtensionNs="com.intellij">
+    <applicationConfigurable parentId="tools"
+                             instance="com.mgorkov.settings.AppSettingsConfigurable"
+                             id="com.mgorkov.settings.AppSettingsConfigurable"
+                             displayName="Explain PostgreSQL"
+    />
+    <applicationService serviceImplementation="com.mgorkov.settings.AppSettingsState"/>
+    <toolWindow factoryClass="com.mgorkov.toolwindow.ExplainToolWindowFactory"
+                id="Explain PostgreSQL"
+                anchor="bottom"
+                secondary="true"
+                canCloseContents="true"
+                largeStripeAnchor="true"
+                icon="AllIcons.Xml.Browsers.Chrome"
+                doNotActivateOnStart="true"
+    />
+  </extensions>
+  <actions>
+    <action id="SQLFormat" class="com.mgorkov.actions.SQLFormatter" text="SQL Format">
+      <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+      <keyboard-shortcut keymap="$default" first-keystroke="ctrl Q" second-keystroke="F"/>
+    </action>
+  </actions>
+</idea-plugin>

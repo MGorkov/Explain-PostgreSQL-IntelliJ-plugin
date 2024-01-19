@@ -1,5 +1,8 @@
 package com.mgorkov.api;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.intellij.codeInsight.hint.HintManager;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.AnActionEvent;
@@ -17,7 +20,7 @@ import com.intellij.ui.awt.RelativePoint;
 import com.mgorkov.settings.AppSettingsState;
 import com.mgorkov.settings.Subscriber;
 import org.jetbrains.annotations.NotNull;
-import org.json.JSONObject;
+//import org.json.JSONObject;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -44,8 +47,10 @@ public final class ExplainApiService implements Subscriber, Disposable {
     }
 
     public CompletableFuture<String> beautifier(AnActionEvent actionEvent, @NotNull String sql) {
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("query_src", sql);
+        JsonObject jsonObject = new JsonObject();
+        jsonObject.addProperty("query_src", sql);
+//        JSONObject jsonObject = new JSONObject();
+//        jsonObject.put("query_src", sql);
 
         log.debug("POST JSON: " + jsonObject);
 
@@ -61,9 +66,14 @@ public final class ExplainApiService implements Subscriber, Disposable {
                 .thenApply(HttpResponse::body)
                 .thenApply((res) -> {
                     log.debug("Beautifier result: " + res);
-                    JSONObject jsonRes = new JSONObject(res);
-                    String btf_query = jsonRes.getString("btf_query");
-                    String btf_query_text = jsonRes.getString("btf_query_text");
+                    JsonElement jsonElement = JsonParser.parseString(res);
+                    JsonObject object = jsonElement.getAsJsonObject();
+                    String btf_query = object.get("btf_query").getAsString();
+                    String btf_query_text = object.get("btf_query_text").getAsString();
+
+//                    JSONObject jsonRes = new JSONObject(res);
+//                    String btf_query = jsonRes.getString("btf_query");
+//                    String btf_query_text = jsonRes.getString("btf_query_text");
                     if (btf_query.equals(btf_query_text)) {
                         showErrorMessage(actionEvent, btf_query_text);
                         return null;
@@ -77,9 +87,12 @@ public final class ExplainApiService implements Subscriber, Disposable {
     }
 
     public CompletableFuture<String> plan_archive(String plan, String query) {
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("plan", plan);
-        jsonObject.put("query", query);
+        JsonObject jsonObject = new JsonObject();
+        jsonObject.addProperty("plan", plan);
+        jsonObject.addProperty("query", query);
+//        JSONObject jsonObject = new JSONObject();
+//        jsonObject.put("plan", plan);
+//        jsonObject.put("query", query);
         log.debug("POST JSON: " + jsonObject);
 
         MessageFormat format = new MessageFormat("Found. Redirecting to {0}");

@@ -5,15 +5,15 @@ plugins {
 }
 
 group = "com.mgorkov"
-version = "1.0.1"
+version = "1.0.3-20240119"
 
 repositories {
   mavenCentral()
 }
 
-dependencies {
-  implementation("org.json:json:20231013")
-}
+//dependencies {
+//  implementation("org.json:json:20231013")
+//}
 
 // Configure Gradle IntelliJ Plugin
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-gradle-intellij-plugin.html

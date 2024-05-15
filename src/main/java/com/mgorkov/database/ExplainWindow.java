@@ -44,8 +44,9 @@ public class ExplainWindow {
         this.plan = plan;
         this.query = this.context.file.getQuery();
 
-        String url = explainApi.plan_archive(plan, query).join();
-        this.browser.load(url);
+        explainApi.plan_archive(plan, query, (url) -> {
+            this.browser.load(url);
+        });
     }
 
 }

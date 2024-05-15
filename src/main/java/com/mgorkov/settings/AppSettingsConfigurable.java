@@ -3,6 +3,7 @@ package com.mgorkov.settings;
 import com.intellij.openapi.options.Configurable;
 import com.intellij.openapi.options.ConfigurationException;
 import com.intellij.openapi.util.NlsContexts;
+import com.mgorkov.toolwindow.ExplainAuthDialog;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
@@ -43,7 +44,14 @@ public class AppSettingsConfigurable implements Configurable {
             new URL(explainUrl).openStream().close();
             settings.setExplainUrl(explainUrl);
         } catch (Exception e) {
-            throw new ConfigurationException(e.getMessage());
+            String message = e.getMessage();
+            if (message.contains("401")) {
+                settings.setExplainUrl(explainUrl);
+                ExplainAuthDialog explainAuthDialog = new ExplainAuthDialog();
+                explainAuthDialog.show();
+            } else {
+                throw new ConfigurationException(message);
+            }
         }
     }
 

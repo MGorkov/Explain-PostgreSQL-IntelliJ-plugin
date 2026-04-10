@@ -41,6 +41,11 @@ public class ExplainAuthDialog extends DialogWrapper {
             private String title = "";
 
             @Override
+            public void onFullscreenModeChange(CefBrowser browser, boolean fullscreen) {
+
+            }
+
+            @Override
             public void onTitleChange(CefBrowser cefBrowser, String s) {
                 if (!title.equals(s)) {
                     title = s;

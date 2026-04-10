@@ -6,22 +6,30 @@ import com.intellij.openapi.application.ApplicationInfo;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.extensions.PluginId;
+import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.ui.jcef.JBCefApp;
 import com.intellij.ui.jcef.JBCefBrowser;
+import com.intellij.util.io.HttpRequests;
 import com.mgorkov.settings.AppSettingsState;
 import org.cef.CefClient;
-import org.cef.callback.CefAuthCallback;
-import org.cef.callback.CefURLRequestClient;
+//import org.cef.callback.CefAuthCallback;
+//import org.cef.callback.CefURLRequestClient;
 import org.cef.network.*;
 import org.cef.browser.CefBrowser;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import java.awt.*;
-import java.nio.charset.StandardCharsets;
-import java.util.Map;
+import java.io.IOException;
+//import java.nio.charset.StandardCharsets;
+//import java.util.HashMap;
+//import java.util.Map;
 import java.util.function.Consumer;
 
+import com.intellij.openapi.progress.ProgressIndicator;
+import com.intellij.openapi.progress.ProgressManager;
+import com.intellij.openapi.progress.Task;
+import org.jetbrains.annotations.NotNull;
 
 public class ExplainBrowser implements Disposable {
 	public static final String EMPTY_URL = "about:blank";
@@ -53,25 +61,99 @@ public class ExplainBrowser implements Disposable {
 		return cefBrowser;
 	}
 
+//	public void request(String URL, String json, Consumer<String> callback) {
+//		CefRequest cefRequest = CefRequest.create();
+//		CefPostData cefPostData = CefPostData.create();
+//		CefPostDataElement cefPostDataElement = CefPostDataElement.create();
+//		byte[] bytes = json.getBytes();
+//		cefPostDataElement.setToBytes(bytes.length, bytes);
+//		cefPostData.addElement(cefPostDataElement);
+//		Map<String, String> headers = Map.of(
+//				"Content-Type", "application/json",
+//				"User-Agent", userAgent
+//		);
+//		cefRequest.setMethod("POST");
+//		cefRequest.setURL(URL);
+//		cefRequest.setHeaderMap(headers);
+//		cefRequest.setPostData(cefPostData);
+//		cefRequest.setFlags(1 << 3 | 1 << 7); // UR_FLAG_ALLOW_STORED_CREDENTIALS | UR_FLAG_STOP_ON_REDIRECT
+//		cefRequest.setFirstPartyForCookies(settings.getExplainUrl());
+//		APIClient client = new APIClient(callback);
+//		CefURLRequest.create(cefRequest, client);
+//	}
 	public void request(String URL, String json, Consumer<String> callback) {
-		CefRequest cefRequest = CefRequest.create();
-		CefPostData cefPostData = CefPostData.create();
-		CefPostDataElement cefPostDataElement = CefPostDataElement.create();
-		byte[] bytes = json.getBytes();
-		cefPostDataElement.setToBytes(bytes.length, bytes);
-		cefPostData.addElement(cefPostDataElement);
-		Map<String, String> headers = Map.of(
-				"Content-Type", "application/json",
-				"User-Agent", userAgent
-		);
-		cefRequest.setMethod("POST");
-		cefRequest.setURL(URL);
-		cefRequest.setHeaderMap(headers);
-		cefRequest.setPostData(cefPostData);
-		cefRequest.setFlags(1 << 3 | 1 << 7); // UR_FLAG_ALLOW_STORED_CREDENTIALS | UR_FLAG_STOP_ON_REDIRECT
-		cefRequest.setFirstPartyForCookies(settings.getExplainUrl());
-		APIClient client = new APIClient(callback);
-		CefURLRequest.create(cefRequest, client);
+		ProgressManager.getInstance().run(new Task.Backgroundable(null, "Sending plan for analysis...", true) {
+			@Override
+			public void run(@NotNull ProgressIndicator indicator) {
+				CefCookieManager cookieManager = CefCookieManager.getGlobalManager();
+				final StringBuilder cookieHeader = new StringBuilder();
+				final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+
+				cookieManager.visitUrlCookies(URL, true, (cookie, count, total, delete) -> {
+					if (cookie != null) {
+						if (cookieHeader.length() > 0) cookieHeader.append("; ");
+						cookieHeader.append(cookie.name).append("=").append(cookie.value);
+					}
+					if (count == total - 1) {
+						latch.countDown(); // Все куки собраны
+					}
+					return true;
+				});
+
+				try {
+					latch.await(500, java.util.concurrent.TimeUnit.MILLISECONDS);
+				} catch (InterruptedException ignored) {}
+
+				if (indicator.isCanceled()) return;
+
+				executeRequestSynchronously(URL, json, cookieHeader.toString(), callback, indicator);
+			}
+		});
+	}
+
+	private void executeRequestSynchronously(String URL, String json, String cookieString, Consumer<String> callback, ProgressIndicator indicator) {
+		try {
+			indicator.checkCanceled();
+			indicator.setText("Connecting to server...");
+			HttpRequests.post(URL, "application/json")
+					.userAgent(userAgent)
+					.connectTimeout(10000)
+					.readTimeout(30000)
+					.connect(request -> {
+						java.net.HttpURLConnection conn = (java.net.HttpURLConnection) request.getConnection();
+						conn.setInstanceFollowRedirects(false);
+						if (cookieString != null && !cookieString.isEmpty()) {
+							conn.setRequestProperty("Cookie", cookieString);
+						}
+
+						indicator.checkCanceled();
+						indicator.setText("Sending data...");
+						request.write(json);
+
+						int status = conn.getResponseCode();
+						indicator.checkCanceled();
+						indicator.setText("Receiving response...");
+
+						if (status == 200) {
+							callback.accept(request.readString(indicator));
+						} else if (status == 301 || status == 302) {
+							callback.accept(conn.getHeaderField("Location"));
+						} else if (status == 401) {
+							ApplicationManager.getApplication().invokeLater(() ->
+								new ExplainAuthDialog(callback).show()
+							);
+						}
+						return null;
+					});
+		} catch (ProcessCanceledException e) {
+			Logger.getInstance(ExplainBrowser.class).info("User canceled the request");
+			throw e;
+		} catch (java.net.SocketTimeoutException e) {
+			Logger.getInstance(ExplainBrowser.class).warn("Request timeout for " + URL);
+			indicator.setText("Operation timed out");
+		} catch (IOException e) {
+			Logger.getInstance(ExplainBrowser.class).error("Request failed", e);
+		}
 	}
 
 	public void load(@Nullable String url) {
@@ -103,60 +185,61 @@ public class ExplainBrowser implements Disposable {
 	}
 }
 
-class APIClient implements CefURLRequestClient {
-	private static final Logger log = Logger.getInstance(ExplainBrowser.class);
-
-	public String data = "";
-	Consumer<String> callback;
-
-	public APIClient(Consumer<String> callback) {
-		this.callback = callback;
-	}
-
-	@Override
-	public void onRequestComplete(CefURLRequest cefURLRequest) {
-		CefResponse response = cefURLRequest.getResponse();
-		int responseStatus = response.getStatus();
-		if (responseStatus == 200 && data.length() > 0) {
-			this.callback.accept(data);
-		} else if (responseStatus == 302) {
-			this.callback.accept(response.getHeaderByName("Location"));
-		} else if (responseStatus == 401) {
-			ApplicationManager.getApplication().invokeLater(() -> {
-				ExplainAuthDialog explainAuthDialog = new ExplainAuthDialog(callback);
-				explainAuthDialog.show();
-			});
-		}
-	}
-
-	@Override
-	public void onUploadProgress(CefURLRequest cefURLRequest, int i, int i1) {
-
-	}
-
-	@Override
-	public void onDownloadProgress(CefURLRequest cefURLRequest, int i, int i1) {
-
-	}
-
-	@Override
-	public void onDownloadData(CefURLRequest cefURLRequest, byte[] bytes, int i) {
-		data += new String(bytes, StandardCharsets.UTF_8);
-	}
-
-	@Override
-	public boolean getAuthCredentials(boolean b, String s, int i, String s1, String s2, CefAuthCallback cefAuthCallback) {
-		return false;
-	}
-
-	@Override
-	public void setNativeRef(String s, long l) {
-
-	}
-
-	@Override
-	public long getNativeRef(String s) {
-		return 0;
-	}
-}
+//class APIClient implements CefURLRequestClient {
+//	private static final Logger log = Logger.getInstance(ExplainBrowser.class);
+//
+//	public String data = "";
+//	Consumer<String> callback;
+//	private final Map<String, Long> nativeRefMap = new HashMap<>(); // Хранилище ссылок
+//
+//	public APIClient(Consumer<String> callback) {
+//		this.callback = callback;
+//	}
+//
+//	@Override
+//	public void onRequestComplete(CefURLRequest cefURLRequest) {
+//		CefResponse response = cefURLRequest.getResponse();
+//		int responseStatus = response.getStatus();
+//		if (responseStatus == 200 && data.length() > 0) {
+//			this.callback.accept(data);
+//		} else if (responseStatus == 302) {
+//			this.callback.accept(response.getHeaderByName("Location"));
+//		} else if (responseStatus == 401) {
+//			ApplicationManager.getApplication().invokeLater(() -> {
+//				ExplainAuthDialog explainAuthDialog = new ExplainAuthDialog(callback);
+//				explainAuthDialog.show();
+//			});
+//		}
+//	}
+//
+//	@Override
+//	public void onUploadProgress(CefURLRequest cefURLRequest, int i, int i1) {
+//
+//	}
+//
+//	@Override
+//	public void onDownloadProgress(CefURLRequest cefURLRequest, int i, int i1) {
+//
+//	}
+//
+//	@Override
+//	public void onDownloadData(CefURLRequest cefURLRequest, byte[] bytes, int i) {
+//		data += new String(bytes, StandardCharsets.UTF_8);
+//	}
+//
+//	@Override
+//	public boolean getAuthCredentials(boolean b, String s, int i, String s1, String s2, CefAuthCallback cefAuthCallback) {
+//		return false;
+//	}
+//
+//	@Override
+//	public void setNativeRef(String identifier, long nativeRef) {
+//		nativeRefMap.put(identifier, nativeRef);
+//	}
+//
+//	@Override
+//	public long getNativeRef(String identifier) {
+//		return nativeRefMap.getOrDefault(identifier, 0L);
+//	}
+//}
 

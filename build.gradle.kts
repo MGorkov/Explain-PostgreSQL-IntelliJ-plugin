@@ -3,8 +3,8 @@ import java.time.format.DateTimeFormatter
 
 plugins {
   id("java")
-  id("org.jetbrains.kotlin.jvm") version "1.9.0"
-  id("org.jetbrains.intellij") version "1.15.0"
+  alias(libs.plugins.kotlin)
+  alias(libs.plugins.intellijPlatform)
 }
 
 group = "com.mgorkov"
@@ -12,38 +12,38 @@ group = "com.mgorkov"
 val buildTimeAndDate = OffsetDateTime.now()
 val buildDate = DateTimeFormatter.ofPattern("YYYYMMdd").format(buildTimeAndDate)
 
-version = "1.2.1-" + buildDate
+version = "1.3.1-" + buildDate
+
+kotlin {
+  jvmToolchain(17)
+}
 
 repositories {
   mavenCentral()
+  gradlePluginPortal()
+  intellijPlatform {
+    defaultRepositories()
+  }
 }
 
-//dependencies {
-//  implementation("org.json:json:20231013")
-//}
+dependencies {
+  intellijPlatform {
+    intellijIdea(providers.gradleProperty("platformVersion"))
+    bundledPlugin("com.intellij.database")
+  }
+}
 
-// Configure Gradle IntelliJ Plugin
-// Read more: https://plugins.jetbrains.com/docs/intellij/tools-gradle-intellij-plugin.html
-intellij {
-  version.set("2022.2.5")
-  type.set("IU") // Target IDE Platform
-
-  plugins.set(listOf("com.intellij.database"))
+intellijPlatform {
+  pluginConfiguration {
+    ideaVersion {
+      sinceBuild = providers.gradleProperty("pluginSinceBuild")
+    }
+  }
 }
 
 tasks {
-  // Set the JVM compatibility versions
-  withType<JavaCompile> {
-    sourceCompatibility = "17"
-    targetCompatibility = "17"
-  }
-  withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-    kotlinOptions.jvmTarget = "17"
-  }
-
-  patchPluginXml {
-    sinceBuild.set("222")
-    untilBuild.set("241.*")
+  wrapper {
+    gradleVersion = providers.gradleProperty("gradleVersion").get()
   }
 
   signPlugin {

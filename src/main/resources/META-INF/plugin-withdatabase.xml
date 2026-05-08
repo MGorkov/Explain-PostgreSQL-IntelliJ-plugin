@@ -1,10 +1,4 @@
 <idea-plugin>
-    <extensions defaultExtensionNs="com.intellij">
-        <projectService id="PgExplainWindowService" serviceImplementation="com.mgorkov.database.PgExplainWindowService"/>
-        <fileType implementationClass="com.mgorkov.file.PgPlanFileType" name="PGPLAN" fieldName="INSTANCE" extensions="pgplan"/>
-        <fileEditorProvider implementation="com.mgorkov.file.PgPlanEditorProvider"/>
-    </extensions>
-
     <actions>
         <action id="com.mgorkov.actions.ExplainAnalyzeAction"
                 class="com.mgorkov.actions.ExplainAnalyzeAction" text="Explain Analyze (Tensor)"

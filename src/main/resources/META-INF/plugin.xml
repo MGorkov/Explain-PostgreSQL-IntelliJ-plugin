@@ -4,22 +4,27 @@
   <vendor email="explain@tensor.ru" url="https://explain.tensor.ru">TENSOR COMPANY LTD</vendor>
 
   <description><![CDATA[
-  Analyzes EXPLAIN plan from PostgreSQL and related (Greenplum, Citus, TimescaleDB and Amazon RedShift).
+  Analyzes EXPLAIN plan from PostgreSQL and related (Greenplum, Citus, TimescaleDB, Amazon RedShift).
   <br><br>
   Shows plan and node details and visualizations with piechart, flowchart and tilemap, also gives smart recommendations to improve query.
   <p><a href="https://explain.tensor.ru/about">Learn more</a>
   <br><br>
   Usage:
    <ul>
-    <li>Plan analyze - open "Explain PostgreSQL" tool window and paste the plan to site</li>
-    <li>Format query - right-click the current query and in context menu choose "SQL Format" or press "Ctrl+Q F"
-     <br>(uses the public api from the https://explain.tensor.ru , the site can be changed in Settings | Tools | Explain PostgreSQL)</br>
+    <li><b>Run query and analyze plan</b><br>
+      <ul>
+        <li><b>IntelliJ Ultimate:</b> right-click the query in Database Console and choose "Explain Plan | Explain Analyze (Tensor)"
+          <br>(Webstorm requires installation of Database Tools and SQL plugin)
+        </li>
+        <li><b>IntelliJ Community:</b> requires <a href="https://plugins.jetbrains.com/plugin/1800-database-navigator">Database Navigator (DBN)</a> plugin. Then you can either right-click the query in the editor and select "Explain Analyze (Tensor)", or use the corresponding action on the DBN toolbar.</li>
+      </ul>
     </li>
-    <li>Run query and analyze plan - right-click the query in "Query console" and in context menu choose "Explain Plan | Explain Analyze (Tensor)"
-     <br>(Webstorm requires installation of Database Tools and SQL plugin)</br>
+    <li><b>Format query</b> – right-click the current query and in context menu choose "SQL Format" or press "Ctrl+Q F"
+      (uses the public api from https://explain.tensor.ru , the site can be changed in Settings | Tools | Explain PostgreSQL)
     </li>
-    </ul>
-  <br><br>
+    <li><b>Plan analyze manually</b> – open "Explain PostgreSQL" tool window and paste the plan from any source</li>
+   </ul>
+  <br>
   <a href="https://n.sbis.ru/explain">Support</a>
   ]]></description>
 
@@ -33,8 +38,13 @@
   <depends>com.intellij.modules.platform</depends>
   <depends>com.intellij.modules.lang</depends>
   <depends optional="true" config-file="plugin-withdatabase.xml">com.intellij.database</depends>
+  <depends optional="true" config-file="plugin-withDBN.xml">DBN</depends>
 
   <extensions defaultExtensionNs="com.intellij">
+    <postStartupActivity implementation="com.mgorkov.JcefPreloader"/>
+    <projectService id="PgExplainWindowService" serviceImplementation="com.mgorkov.database.PgExplainWindowService"/>
+    <fileType implementationClass="com.mgorkov.file.PgPlanFileType" name="PGPLAN" fieldName="INSTANCE" extensions="pgplan"/>
+    <fileEditorProvider implementation="com.mgorkov.file.PgPlanEditorProvider"/>
     <applicationConfigurable parentId="tools"
                              instance="com.mgorkov.settings.AppSettingsConfigurable"
                              id="com.mgorkov.settings.AppSettingsConfigurable"
@@ -46,7 +56,6 @@
                 anchor="bottom"
                 secondary="true"
                 canCloseContents="true"
-                largeStripeAnchor="true"
                 icon="AllIcons.Xml.Browsers.Chrome"
                 doNotActivateOnStart="true"
     />

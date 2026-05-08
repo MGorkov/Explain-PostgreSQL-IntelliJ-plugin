@@ -1,5 +1,6 @@
 package com.mgorkov.actions;
 
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
@@ -53,5 +54,10 @@ public class SQLFormatter extends AnAction implements Runnable, DumbAware {
     public void run() {
         document.deleteString(0, document.getTextLength());
         document.insertString(0, formatted);
+    }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+        return ActionUpdateThread.BGT;
     }
 }

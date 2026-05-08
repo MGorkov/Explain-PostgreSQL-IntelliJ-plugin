@@ -40,7 +40,14 @@ public class ExplainToolWindowFactory implements ToolWindowFactory, DumbAware {
 	public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
 		createNewTab(project);
 		ButtonNewTab newTabBtn = new ButtonNewTab("New Tab", null, AllIcons.Toolbar.AddSlot);
-		((ToolWindowEx) toolWindow).setTabActions(newTabBtn);
+		if (toolWindow instanceof ToolWindowEx) {
+			((ToolWindowEx) toolWindow).setTabActions(newTabBtn);
+		}
 	}
 
+	@Override
+	public void init(@NotNull ToolWindow window) {
+		window.setAvailable(true);
+		window.setToHideOnEmptyContent(false);
+	}
 }

@@ -1,0 +1,18 @@
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <projectService serviceImplementation="com.mgorkov.dbn.explain.ExplainPlanManager"/>
+    </extensions>
+
+    <actions>
+        <action id="com.mgorkov.dbn.actions.ExplainAction" class="com.mgorkov.dbn.actions.ExplainAction"
+                text="Explain Plan (Tensor)" icon="AllIcons.Actions.ProfileYellow">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <add-to-group group-id="DBNavigator.ActionGroup.FileEditor"/>
+        </action>
+        <action id="com.mgorkov.dbn.actions.ExplainAnalyzeAction" class="com.mgorkov.dbn.actions.ExplainAnalyzeAction"
+                text="Explain Analyze Plan (Tensor)" icon="com.dbn.common.icon.Icons.STMT_EXECUTION_EXPLAIN">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <add-to-group group-id="DBNavigator.ActionGroup.FileEditor"/>
+        </action>
+    </actions>
+</idea-plugin>

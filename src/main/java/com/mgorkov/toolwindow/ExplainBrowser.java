@@ -11,25 +11,19 @@ import com.intellij.ui.jcef.JBCefApp;
 import com.intellij.ui.jcef.JBCefBrowser;
 import com.intellij.util.io.HttpRequests;
 import com.mgorkov.settings.AppSettingsState;
-import org.cef.CefClient;
-//import org.cef.callback.CefAuthCallback;
-//import org.cef.callback.CefURLRequestClient;
-import org.cef.network.*;
 import org.cef.browser.CefBrowser;
+import org.cef.network.CefCookieManager;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import java.awt.*;
 import java.io.IOException;
-//import java.nio.charset.StandardCharsets;
-//import java.util.HashMap;
-//import java.util.Map;
 import java.util.function.Consumer;
 
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
-import org.jetbrains.annotations.NotNull;
 
 public class ExplainBrowser implements Disposable {
 	public static final String EMPTY_URL = "about:blank";
@@ -40,47 +34,39 @@ public class ExplainBrowser implements Disposable {
 	final String userAgent = "JetBrains " + fullApplicationName + " " + pluginVersion;
 	private JBCefBrowser browser = null;
 	private CefBrowser cefBrowser;
-	private CefClient cefClient;
-	private JPanel panel = null;
-	AppSettingsState settings;
+	private JPanel errorPanel = null;
+
 	public ExplainBrowser(boolean loadOnStart) {
-		settings = AppSettingsState.getInstance();
 		if (isSupported) {
-			browser = new JBCefBrowser(EMPTY_URL);
-			cefBrowser = browser.getCefBrowser();
-			cefClient = browser.getJBCefClient().getCefClient();
-			if (loadOnStart) load(settings.getExplainUrl());
+			try {
+				createBrowser();
+				if (loadOnStart) {
+					load(AppSettingsState.getInstance().getExplainUrl());
+				}
+			} catch (Exception e) {
+				Logger.getInstance(ExplainBrowser.class).error("Failed to create browser", e);
+				createErrorPanel("Failed to create browser: " + e.getMessage());
+			}
 		} else {
-			panel = new JPanel(new BorderLayout());
-			JLabel label = new JLabel("JCEF browser is not supported");
-			panel.add(label, BorderLayout.CENTER);
+			createErrorPanel("JCEF browser is not supported");
 		}
+	}
+
+	private void createBrowser() {
+		browser = new JBCefBrowser(EMPTY_URL);
+		cefBrowser = browser.getCefBrowser();
+	}
+
+	private void createErrorPanel(String message) {
+		errorPanel = new JPanel(new BorderLayout());
+		JLabel label = new JLabel(message);
+		errorPanel.add(label, BorderLayout.CENTER);
 	}
 
 	public CefBrowser getCefBrowser() {
 		return cefBrowser;
 	}
 
-//	public void request(String URL, String json, Consumer<String> callback) {
-//		CefRequest cefRequest = CefRequest.create();
-//		CefPostData cefPostData = CefPostData.create();
-//		CefPostDataElement cefPostDataElement = CefPostDataElement.create();
-//		byte[] bytes = json.getBytes();
-//		cefPostDataElement.setToBytes(bytes.length, bytes);
-//		cefPostData.addElement(cefPostDataElement);
-//		Map<String, String> headers = Map.of(
-//				"Content-Type", "application/json",
-//				"User-Agent", userAgent
-//		);
-//		cefRequest.setMethod("POST");
-//		cefRequest.setURL(URL);
-//		cefRequest.setHeaderMap(headers);
-//		cefRequest.setPostData(cefPostData);
-//		cefRequest.setFlags(1 << 3 | 1 << 7); // UR_FLAG_ALLOW_STORED_CREDENTIALS | UR_FLAG_STOP_ON_REDIRECT
-//		cefRequest.setFirstPartyForCookies(settings.getExplainUrl());
-//		APIClient client = new APIClient(callback);
-//		CefURLRequest.create(cefRequest, client);
-//	}
 	public void request(String URL, String json, Consumer<String> callback) {
 		ProgressManager.getInstance().run(new Task.Backgroundable(null, "Sending plan for analysis...", true) {
 			@Override
@@ -95,7 +81,7 @@ public class ExplainBrowser implements Disposable {
 						cookieHeader.append(cookie.name).append("=").append(cookie.value);
 					}
 					if (count == total - 1) {
-						latch.countDown(); // Все куки собраны
+						latch.countDown(); // All cookies are set
 					}
 					return true;
 				});
@@ -153,93 +139,38 @@ public class ExplainBrowser implements Disposable {
 			indicator.setText("Operation timed out");
 		} catch (IOException e) {
 			Logger.getInstance(ExplainBrowser.class).error("Request failed", e);
+			indicator.setText("Request failed");
 		}
 	}
 
 	public void load(@Nullable String url) {
-		if (this.browser == null) return;
-		if (url == null) {
-			browser.loadURL(EMPTY_URL);
-		} else {
-			browser.loadURL(url);
+		if (browser != null) {
+			browser.loadURL(url != null ? url : EMPTY_URL);
 		}
 	}
 
 	@Nullable
 	public JComponent getComponent() {
-		if (browser == null) {
-			return panel;
-		} else {
+		if (browser != null) {
 			return browser.getComponent();
+		} else if (errorPanel != null) {
+			return errorPanel;
+		} else {
+			JPanel panel = new JPanel(new BorderLayout());
+			JLabel label = new JLabel("Browser not available");
+			panel.add(label, BorderLayout.CENTER);
+			return panel;
 		}
 	}
 
 	@Override
 	public void dispose() {
-		if (isSupported) {
-			cefClient.removeLoadHandler();
-			cefBrowser.stopLoad();
-			cefBrowser.close(false);
-			browser.dispose();
+		if (browser != null) {
+			try {
+				browser.dispose();
+			} catch (Exception e) {
+				Logger.getInstance(ExplainBrowser.class).warn("Error disposing browser", e);
+			}
 		}
 	}
 }
-
-//class APIClient implements CefURLRequestClient {
-//	private static final Logger log = Logger.getInstance(ExplainBrowser.class);
-//
-//	public String data = "";
-//	Consumer<String> callback;
-//	private final Map<String, Long> nativeRefMap = new HashMap<>(); // Хранилище ссылок
-//
-//	public APIClient(Consumer<String> callback) {
-//		this.callback = callback;
-//	}
-//
-//	@Override
-//	public void onRequestComplete(CefURLRequest cefURLRequest) {
-//		CefResponse response = cefURLRequest.getResponse();
-//		int responseStatus = response.getStatus();
-//		if (responseStatus == 200 && data.length() > 0) {
-//			this.callback.accept(data);
-//		} else if (responseStatus == 302) {
-//			this.callback.accept(response.getHeaderByName("Location"));
-//		} else if (responseStatus == 401) {
-//			ApplicationManager.getApplication().invokeLater(() -> {
-//				ExplainAuthDialog explainAuthDialog = new ExplainAuthDialog(callback);
-//				explainAuthDialog.show();
-//			});
-//		}
-//	}
-//
-//	@Override
-//	public void onUploadProgress(CefURLRequest cefURLRequest, int i, int i1) {
-//
-//	}
-//
-//	@Override
-//	public void onDownloadProgress(CefURLRequest cefURLRequest, int i, int i1) {
-//
-//	}
-//
-//	@Override
-//	public void onDownloadData(CefURLRequest cefURLRequest, byte[] bytes, int i) {
-//		data += new String(bytes, StandardCharsets.UTF_8);
-//	}
-//
-//	@Override
-//	public boolean getAuthCredentials(boolean b, String s, int i, String s1, String s2, CefAuthCallback cefAuthCallback) {
-//		return false;
-//	}
-//
-//	@Override
-//	public void setNativeRef(String identifier, long nativeRef) {
-//		nativeRefMap.put(identifier, nativeRef);
-//	}
-//
-//	@Override
-//	public long getNativeRef(String identifier) {
-//		return nativeRefMap.getOrDefault(identifier, 0L);
-//	}
-//}
-
